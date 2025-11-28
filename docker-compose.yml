@@ -1,0 +1,17 @@
+services:
+  todo-scheduler:
+    build: .
+    ports:
+      - "7540:7540"
+    env_file:
+      - .env
+    environment:
+      - TODO_DBFILE=/app/data/scheduler.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7540/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

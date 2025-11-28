@@ -1,3 +1,4 @@
-scheduler.db
 sqlite3
 .env
+data
+backups
