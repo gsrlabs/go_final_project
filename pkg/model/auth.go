@@ -4,17 +4,17 @@ import(
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// SignInInput - структура для входа
+// SignInInput - the structure for entry
 type SignInInput struct {
     Password string `json:"password"`
 }
 
-// SignInResponse - ответ при успешной аутентификации
+// SignInResponse - response upon successful authentication
 type SignInResponse struct {
     Token string `json:"token"`
 }
 
-// Claims - структура для JWT токена
+// Claims - the structure for the JWT token
 type Claims struct {
     PasswordHash string `json:"pwd_hash"`
     jwt.RegisteredClaims

@@ -7,8 +7,49 @@ import (
 	"time"
 )
 
-// NextDate
-func  NextDate(now time.Time, dstart string, repeat string) (string, error) {
+// NormalizeDate validates and normalizes task date
+// For past dates without repetition, sets to today
+// For past dates with repetition, calculates next occurrence
+// Returns normalized date in YYYYMMDD format
+func NormalizeDate(dateStart, repeat string) (string, error) {
+	now := time.Now()
+	today := now.Format(dateLayout)
+
+	if dateStart == "" || dateStart == "today" {
+		dateStart = today
+	}
+
+	parsed, err := time.Parse(dateLayout, dateStart)
+	if err != nil {
+		return "", fmt.Errorf("invalid date format")
+	}
+
+	// Keep future dates as-is
+	if parsed.Format(dateLayout) >= today {
+		return dateStart, nil
+	}
+
+	// Calculate next occurrence for recurring tasks
+	if repeat != "" {
+		next, err := NextDate(now, dateStart, repeat)
+		if err != nil {
+			return "", err
+		}
+		return next, nil
+	}
+
+	// Set to today for past one-time tasks
+	if parsed.Format(dateLayout) < today {
+		return today, nil
+	}
+
+	return dateStart, nil
+}
+
+// NextDate calculates next occurrence date for recurring tasks
+// Supports daily (d), weekly (w), monthly (m), and yearly (y) rules
+// Returns next date in YYYYMMDD format
+func NextDate(now time.Time, dstart string, repeat string) (string, error) {
 	date, err := time.Parse(dateLayout, dstart)
 	if err != nil {
 		return "", err
@@ -20,7 +61,7 @@ func  NextDate(now time.Time, dstart string, repeat string) (string, error) {
 	var nextDate string
 
 	switch rule {
-	case "d":
+	case "d": // Daily: "d 7" = every 7 days
 		if len(interval) < 2 {
 			return "", fmt.Errorf("invalid d rule")
 		}
@@ -43,7 +84,7 @@ func  NextDate(now time.Time, dstart string, repeat string) (string, error) {
 		}
 
 		nextDate = current.Format(dateLayout)
-	case "y":
+	case "y": // Yearly: "y" = every year on same date
 		current := date
 		if afterNow(current, now) {
 			current = current.AddDate(1, 0, 0)
@@ -54,7 +95,7 @@ func  NextDate(now time.Time, dstart string, repeat string) (string, error) {
 		}
 
 		nextDate = current.Format(dateLayout)
-	case "w":
+	case "w": // Weekly: "w 1,3,5" = Mon, Wed, Fri
 		if len(interval) < 2 {
 			return "", fmt.Errorf("invalid w rule")
 		}
@@ -86,7 +127,7 @@ func  NextDate(now time.Time, dstart string, repeat string) (string, error) {
 		}
 		nextDate = current.Format(dateLayout)
 
-	case "m":
+	case "m": // Monthly: "m 15" = 15th day, "m -1" = last day
 		if len(interval) < 2 {
 			return "", fmt.Errorf("invalid m rule")
 		}
@@ -123,10 +164,13 @@ func  NextDate(now time.Time, dstart string, repeat string) (string, error) {
 	return nextDate, nil
 }
 
+// afterNow checks if date is after current time
 func afterNow(date, now time.Time) bool {
 	return date.After(now)
 }
 
+// parseDays converts days string to integer list
+// Supports special values: -1 (last day), -2 (second last day)
 func parseDays(daysStr string) ([]int, error) {
 	daysList := strings.Split(daysStr, ",")
 	var days []int
@@ -143,6 +187,8 @@ func parseDays(daysStr string) ([]int, error) {
 	return days, nil
 }
 
+// parseMonths converts months string to integer list
+// Returns all months (1-12) if empty string
 func parseMonths(monthsStr string) ([]int, error) {
 	if monthsStr == "" {
 		return []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, nil
@@ -163,6 +209,7 @@ func parseMonths(monthsStr string) ([]int, error) {
 	return months, nil
 }
 
+// isMonthInList checks if month is in allowed months list
 func isMonthInList(month int, months []int) bool {
 	for _, m := range months {
 		if m == month {
@@ -172,6 +219,8 @@ func isMonthInList(month int, months []int) bool {
 	return false
 }
 
+// isDayInList checks if date matches any day in the list
+// Handles regular days and special values (-1, -2)
 func isDayInList(date time.Time, days []int) bool {
 	day := date.Day()
 	for _, d := range days {
@@ -188,13 +237,14 @@ func isDayInList(date time.Time, days []int) bool {
 	return false
 }
 
+// isLastDayOfMonth checks if date is the last day of month
 func isLastDayOfMonth(date time.Time) bool {
 	nextDay := date.AddDate(0, 0, 1)
 	return nextDay.Month() != date.Month()
 }
 
+// isSecondLastDayOfMonth checks if date is the second last day of month
 func isSecondLastDayOfMonth(date time.Time) bool {
 	nextDay := date.AddDate(0, 0, 1)
 	return isLastDayOfMonth(nextDay)
 }
-
