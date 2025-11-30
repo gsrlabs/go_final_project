@@ -110,9 +110,9 @@ case "$1" in
         go test ./tests
 
         # "🔧 Меняем права доступа как было"
-        if [ -d data ]; then
-            sudo chmod -R 755 data/
-        fi
+        # if [ -d data ]; then
+        #    sudo chmod -R 755 data/
+        #fi
         ;;
 
     # === ОПАСНАЯ КОМАНДА ===
