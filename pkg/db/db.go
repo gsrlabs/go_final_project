@@ -7,7 +7,7 @@ import (
 	"log"
 
 	"os"
-	"todo/pkg/model"
+	models "todo/pkg/models"
 
 	_ "modernc.org/sqlite"
 )
@@ -22,41 +22,43 @@ type Storage struct {
 
 // TasksResp represents response structure for tasks list
 type TasksResp struct {
-	Tasks []*model.Task `json:"tasks"`
+	Tasks []*models.Task `json:"tasks"`
 }
 
-// Store is a global database storage instance
-var Store *Storage
-
-// Init initializes database connection and creates schema if needed
-// dbFile - path to SQLite database file
-func Init(dbFile string) error {
+// NewStorage creates a new instance of Storage
+func NewStorage(dbFile string) (*Storage, error) {
 	_, err := os.Stat(dbFile)
 	install := os.IsNotExist(err)
 
 	conn, err := sql.Open("sqlite", dbFile)
 	if err != nil {
 		log.Printf("ERROR: Failed to open database %s: %v", dbFile, err)
-		return err
+		return nil, err
 	}
 
-	Store = &Storage{db: conn}
+	storage := &Storage{db: conn}
 
 	if install {
 		log.Printf("INFO: Database schema not found, creating new database")
-		if _, err := Store.db.Exec(schema); err != nil {
+		if _, err := storage.db.Exec(schema); err != nil {
 			log.Printf("ERROR: Failed to create database schema: %v", err)
-			return err
+			return nil, err
 		}
 		log.Printf("INFO: Database schema created successfully")
 	}
+
 	log.Printf("INFO: Database initialized successfully: %s", dbFile)
-	return nil
+	return storage, nil
+}
+
+// Close closes the connection to the database
+func (s *Storage) Close() error {
+	return s.db.Close()
 }
 
 // AddTask creates a new task in the scheduler
 // Returns task ID or error
-func (s *Storage) AddTask(task *model.Task) (int64, error) {
+func (s *Storage) AddTask(task *models.Task) (int64, error) {
 	log.Printf("DEBUG: Adding new task: %s", task.Title)
 
 	result, err := s.db.Exec(`
@@ -101,10 +103,10 @@ func (s *Storage) GetTasks(limit int) (TasksResp, error) {
 	defer rows.Close()
 
 	var resp TasksResp
-	resp.Tasks = make([]*model.Task, 0)
+	resp.Tasks = make([]*models.Task, 0)
 
 	for rows.Next() {
-		t := &model.Task{}
+		t := &models.Task{}
 		err := rows.Scan(&t.ID, &t.Date, &t.Title, &t.Comment, &t.Repeat)
 		if err != nil {
 			log.Printf("ERROR: Failed to scan task row: %v", err)
@@ -144,11 +146,11 @@ func (s *Storage) GetTasksByTitle(limit int, search string) (TasksResp, error) {
 	defer rows.Close()
 
 	var resp TasksResp
-	resp.Tasks = make([]*model.Task, 0)
+	resp.Tasks = make([]*models.Task, 0)
 
 	for rows.Next() {
 
-		t := &model.Task{}
+		t := &models.Task{}
 		err := rows.Scan(&t.ID, &t.Date, &t.Title, &t.Comment, &t.Repeat)
 		if err != nil {
 			log.Printf("ERROR: Failed to scan task row in GetTasksByTitle: %v", err)
@@ -187,10 +189,10 @@ func (s *Storage) GetTasksByDate(limit int, date string) (TasksResp, error) {
 	defer rows.Close()
 
 	var resp TasksResp
-	resp.Tasks = make([]*model.Task, 0)
+	resp.Tasks = make([]*models.Task, 0)
 
 	for rows.Next() {
-		t := &model.Task{}
+		t := &models.Task{}
 		err := rows.Scan(&t.ID, &t.Date, &t.Title, &t.Comment, &t.Repeat)
 		if err != nil {
 			log.Printf("ERROR: Failed to scan task row in GetTasksByDate: %v", err)
@@ -210,7 +212,7 @@ func (s *Storage) GetTasksByDate(limit int, date string) (TasksResp, error) {
 
 // GetTask retrieves single task by ID
 // id - task identifier
-func (s *Storage) GetTask(id string) (*model.Task, error) {
+func (s *Storage) GetTask(id string) (*models.Task, error) {
 	log.Printf("DEBUG: Getting task by ID: %s", id)
 
 	result := s.db.QueryRow(`
@@ -220,7 +222,7 @@ func (s *Storage) GetTask(id string) (*model.Task, error) {
     `,
 		sql.Named("id", id))
 
-	var task model.Task
+	var task models.Task
 	err := result.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -239,7 +241,7 @@ func (s *Storage) GetTask(id string) (*model.Task, error) {
 
 // UpdateTask updates existing task
 // task - task data with ID
-func (s *Storage) UpdateTask(task *model.Task) error {
+func (s *Storage) UpdateTask(task *models.Task) error {
 	log.Printf("DEBUG: Updating task, ID: %s", task.ID)
 
 	resalt, err := s.db.Exec(`

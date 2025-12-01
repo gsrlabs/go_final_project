@@ -1,5 +1,5 @@
 # ---- Build stage ----
-FROM golang:1.25 AS builder
+FROM golang:1.25.3 AS builder
 
 WORKDIR /app
 
@@ -26,12 +26,11 @@ RUN apk add --no-cache sqlite && \
 COPY --from=builder /app/todo .
 COPY --from=builder /app/web ./web/
 
-# Expose port
-EXPOSE 7540
+EXPOSE ${TODO_PORT:-7540}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-	CMD wget --no-verbose --tries=1 --spider http://localhost:7540/ || exit 1
+	CMD wget --no-verbose --tries=1 --spider "http://localhost:${TODO_PORT:-7540}" || exit 1
 
 # Run application
 CMD ["./todo"]

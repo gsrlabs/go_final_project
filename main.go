@@ -1,13 +1,14 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"todo/pkg/api"
 	"todo/pkg/db"
+
+	"github.com/joho/godotenv"
 )
 
 // main is the entry point of the Todo Scheduler application
@@ -41,9 +42,15 @@ func main() {
 		log.Printf("WARN: Failed to create data directory: %v", err)
 	}
 
-	if err := db.Init(dbFile); err != nil {
+	// Create storage
+	storage, err := db.NewStorage(dbFile)
+	if err != nil {
 		log.Fatal("Database initialization error:", err)
 	}
+	defer storage.Close()
+
+	// Create API
+	app := api.NewAPI(storage)
 
 	// Configure logger to show timestamp and file location
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -51,7 +58,7 @@ func main() {
 	log.Printf("INFO: Database file: %s", dbFile)
 	log.Printf("INFO: Open http://localhost:%s in your browser", port)
 
-	err := http.ListenAndServe(":"+port, api.Router())
+	err = http.ListenAndServe(":"+port, app.Router())
 	if err != nil {
 		log.Fatal("Server startup error:", err)
 	}

@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 	"time"
-	"todo/pkg/model"
+	"todo/pkg/models"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -35,7 +35,7 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input model.SignInInput
+	var input models.SignInInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		log.Printf("WARN: Invalid JSON in signin request: %v", err)
 		sendError(w, "invalid JSON", http.StatusBadRequest)
@@ -61,7 +61,7 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create JWT token
 	expirationTime := time.Now().Add(8 * time.Hour)
-	claims := &model.Claims{
+	claims := &models.Claims{
 		PasswordHash: generatePasswordHash(envPassword),
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
@@ -88,18 +88,16 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	 //TODO Print token for testing purposes (remove in production)
+	//TODO Print token for testing purposes (remove in production)
 	fmt.Println("***\nToken for testing:\n" + tokenString + "\n***")
-	
-	sendJSON(w, model.SignInResponse{Token: tokenString})
-}
 
+	sendJSON(w, models.SignInResponse{Token: tokenString})
+}
 
 // AuthMiddleware validates JWT tokens for protected routes
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("DEBUG: AuthMiddleware checking request: %s %s", r.Method, r.URL.Path)
-
 
 		envPassword := os.Getenv("TODO_PASSWORD")
 		if envPassword == "" {
@@ -132,7 +130,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Parse and validate JWT token
-		claims := &model.Claims{}
+		claims := &models.Claims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
 			return secretKey, nil
 		})

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 	"todo/pkg/db"
-	"todo/pkg/model"
+	"todo/pkg/models"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -16,9 +16,24 @@ import (
 const dateLayout = "20060102"
 const limit int = 50
 
+type API struct {
+	storage *db.Storage
+	router  http.Handler
+}
+
+// NewAPI creates a new instance of the API
+func NewAPI(storage *db.Storage) *API {
+	api := &API{
+		storage: storage,
+	}
+
+	api.setupRouter()
+	return api
+}
+
 // Router sets up HTTP routes and middleware
 // Returns configured HTTP handler
-func Router() http.Handler {
+func (a *API) setupRouter() {
 	r := chi.NewRouter()
 
 	r.Handle("/*", http.FileServer(http.Dir("./web")))
@@ -33,16 +48,22 @@ func Router() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(authMiddleware)
 
-		r.Post("/api/task", addTaskHandler)
-		r.Get("/api/task", getTaskHandler)
-		r.Put("/api/task", updateTaskHandler)
-		r.Get("/api/tasks", tasksHandler)
-		r.Post("/api/task/done", doneTaskHandler)
-		r.Delete("/api/task", deleteTaskHandler)
+		r.Post("/api/task", a.addTaskHandler)
+		r.Get("/api/task", a.getTaskHandler)
+		r.Put("/api/task", a.updateTaskHandler)
+		r.Get("/api/tasks", a.tasksHandler)
+		r.Post("/api/task/done", a.doneTaskHandler)
+		r.Delete("/api/task", a.deleteTaskHandler)
 	})
 
 	log.Printf("INFO: Router initialized with authentication middleware")
-	return r
+
+	a.router = r
+}
+
+// Router returns HTTP handler
+func (a *API) Router() http.Handler {
+	return a.router
 }
 
 // authMiddleware - adapter for chi middleware
@@ -94,10 +115,10 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 
 // addTaskHandler creates a new task
 // POST /api/task
-func addTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (a *API) addTaskHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("DEBUG: Received task creation request")
 
-	var input model.Task
+	var input models.Task
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		log.Printf("WARN: Invalid JSON in task creation request: %v", err)
 		sendError(w, "invalid JSON", http.StatusBadRequest)
@@ -117,14 +138,14 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := model.Task{
+	task := models.Task{
 		Date:    date,
 		Title:   input.Title,
 		Comment: input.Comment,
 		Repeat:  input.Repeat,
 	}
 
-	id, err := db.Store.AddTask(&task)
+	id, err := a.storage.AddTask(&task)
 	if err != nil {
 		log.Printf("ERROR: Failed to save task to database: %v", err)
 		sendError(w, "saving error", http.StatusInternalServerError)
@@ -137,7 +158,7 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 // tasksHandler retrieves tasks list with optional search
 // GET /api/tasks?search=query
-func tasksHandler(w http.ResponseWriter, r *http.Request) {
+func (a *API) tasksHandler(w http.ResponseWriter, r *http.Request) {
 
 	search := r.URL.Query().Get("search")
 	log.Printf("DEBUG: Retrieving tasks, search: '%s'", search)
@@ -146,16 +167,16 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if search == "" {
-		tasks, err = db.Store.GetTasks(limit)
+		tasks, err = a.storage.GetTasks(limit)
 	} else {
 		if date, err2 := time.Parse("02.01.2006", search); err2 == nil {
 			y, m, d := date.Date()
 			date := fmt.Sprintf("%d%02d%02d", y, m, d)
 			log.Printf("DEBUG: Searching tasks by date: %s", date)
-			tasks, err = db.Store.GetTasksByDate(limit, date)
+			tasks, err = a.storage.GetTasksByDate(limit, date)
 		} else {
 			log.Printf("DEBUG: Searching tasks by title/comment: '%s'", search)
-			tasks, err = db.Store.GetTasksByTitle(limit, search)
+			tasks, err = a.storage.GetTasksByTitle(limit, search)
 		}
 	}
 
@@ -171,9 +192,9 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 
 // getTaskHandler retrieves single task by ID
 // GET /api/task?id=task_id
-func getTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (a *API) getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-log.Printf("DEBUG: Retrieving task by ID: %s", id)
+	log.Printf("DEBUG: Retrieving task by ID: %s", id)
 
 	if id == "" {
 		log.Printf("WARN: Task ID not specified in request")
@@ -181,7 +202,7 @@ log.Printf("DEBUG: Retrieving task by ID: %s", id)
 		return
 	}
 
-	task, err := db.Store.GetTask(id)
+	task, err := a.storage.GetTask(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			log.Printf("WARN: Task not found, ID: %s", id)
@@ -199,10 +220,10 @@ log.Printf("DEBUG: Retrieving task by ID: %s", id)
 
 // updateTaskHandler updates existing task
 // PUT /api/task
-func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (a *API) updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("DEBUG: Received task update request")
 
-	var input model.Task
+	var input models.Task
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		log.Printf("WARN: Invalid JSON in task update request: %v", err)
 		sendError(w, "invalid JSON", http.StatusBadRequest)
@@ -228,7 +249,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := model.Task{
+	task := models.Task{
 		ID:      input.ID,
 		Date:    date,
 		Title:   input.Title,
@@ -236,7 +257,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		Repeat:  input.Repeat,
 	}
 
-	err = db.Store.UpdateTask(&task)
+	err = a.storage.UpdateTask(&task)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			log.Printf("WARN: Task not found for update, ID: %s", input.ID)
@@ -254,7 +275,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 // doneTaskHandler marks task as done and handles recurrence
 // POST /api/task/done?id=task_id
-func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (a *API) doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	log.Printf("DEBUG: Marking task as done, ID: %s", id)
 
@@ -264,7 +285,7 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := db.Store.GetTask(id)
+	task, err := a.storage.GetTask(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			log.Printf("WARN: Task not found for done operation, ID: %s", id)
@@ -278,7 +299,7 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	if task.Repeat == "" {
 		// One-time task - delete it
-		err = db.Store.DeleteTask(id)
+		err = a.storage.DeleteTask(id)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
 				log.Printf("WARN: Task not found for deletion, ID: %s", id)
@@ -303,7 +324,7 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.Store.UpdateTaskDate(task.ID, next)
+	err = a.storage.UpdateTaskDate(task.ID, next)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			log.Printf("WARN: Task not found for date update, ID: %s", task.ID)
@@ -320,7 +341,7 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 // deleteTaskHandler removes task from scheduler
 // DELETE /api/task?id=task_id
-func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (a *API) deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	log.Printf("DEBUG: Deleting task, ID: %s", id)
 
@@ -330,7 +351,7 @@ func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := db.Store.DeleteTask(id)
+	err := a.storage.DeleteTask(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			log.Printf("WARN: Task not found for deletion, ID: %s", id)

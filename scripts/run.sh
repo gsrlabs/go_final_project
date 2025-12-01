@@ -10,13 +10,26 @@ NC='\033[0m' # No Color
 # Конфигурация
 COMPOSE="docker compose"
 APP="todo-scheduler"
-NETWORK="todo-network"
 
 # Функции
 success() { echo -e "${GREEN} $1${NC}"; }
 info()    { echo -e "${BLUE} $1${NC}"; }
 warning() { echo -e "${YELLOW} $1${NC}"; }
 error()   { echo -e "${RED} $1${NC}"; }
+
+# Получить порт из .env или использовать по умолчанию
+get_port() {
+    if [ -f ".env" ]; then
+        # Ищем TODO_PORT в .env файле
+        PORT=$(grep -E "^TODO_PORT=" .env | cut -d'=' -f2)
+        if [ -n "$PORT" ]; then
+            echo "$PORT"
+            return
+        fi
+    fi
+    # Если не нашли - используем 7540
+    echo "7540"
+}
 
 # Показать статус
 show_status() {
@@ -51,11 +64,12 @@ show_help() {
 case "$1" in
 
     "start")
-        echo "Запуск Todo Scheduler..."
+        PORT=$(get_port)
+        echo "Запуск Todo Scheduler на порту $PORT..."
         $COMPOSE up -d
         sleep 2
         show_status
-        success "Приложение запущено на http://localhost:7540"
+        success "Приложение запущено на http://localhost:$PORT"
         ;;
 
     "stop")
@@ -65,7 +79,8 @@ case "$1" in
         ;;
 
     "restart")
-        echo "Перезапуск приложения..."
+        PORT=$(get_port)
+        echo "Перезапуск приложения на порту $PORT..."
         $COMPOSE restart
         sleep 2
         show_status
@@ -73,12 +88,13 @@ case "$1" in
         ;;
 
     "rebuild")
-        echo "Пересборка и запуск..."
+        PORT=$(get_port)
+        echo "Пересборка и запуск на порту $PORT..."
         $COMPOSE down
         $COMPOSE up --build -d
         sleep 2
         show_status
-        success "Приложение пересобрано и запущено"
+        success "Приложение пересобрано и запущено на http://localhost:$PORT"
         ;;
 
     "logs")
@@ -96,23 +112,34 @@ case "$1" in
             warning "Файл .env не найден, создаю базовый..."
             cp .env.example .env 2>/dev/null || echo "TODO_PORT=7540" > .env
         fi
+        PORT=$(get_port)
+        echo "Порт: $PORT"
         go run main.go
         ;;
 
     "test")
         echo "Запуск тестов..."
-
+        
+        # Автоматическое исправление прав для тестов
         if [ -d data ]; then
-        # "🔧 Меняем права доступа к data... для тестов"
+            echo "🔧 Временное расширение прав для тестов..."
             sudo chmod -R 777 data/
         fi
-
-        go test ./tests
-
-        # "🔧 Меняем права доступа как было"
+        
+        # Запускаем тесты
+        go test ./tests/...
+        TEST_RESULT=$?
+        
+        # Восстанавливаем безопасные права (опционально)
         # if [ -d data ]; then
-        #    sudo chmod -R 755 data/
-        #fi
+        #     echo "🔧 Восстановление прав доступа..."
+        #     sudo chmod -R 755 data/
+        #     if [ -f data/scheduler.db ]; then
+        #         sudo chmod 644 data/scheduler.db
+        #     fi
+        # fi
+        
+        exit $TEST_RESULT
         ;;
 
     # === ОПАСНАЯ КОМАНДА ===
