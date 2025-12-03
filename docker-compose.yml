@@ -1,0 +1,28 @@
+services:
+  todo-scheduler:
+    build: .
+    # image: gsrlabs/todo-scheduler:latest
+    # container_name: todo-scheduler
+    ports:
+      - "${TODO_PORT:-7540}:${TODO_PORT:-7540}"
+    env_file:
+      - .env
+    environment:
+      - TODO_DBFILE=/app/data/scheduler.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${TODO_PORT:-7540}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # networks:
+    #  - todo-net
+
+# networks:
+#  todo-net:
+#    driver: bridge
+
+
+
