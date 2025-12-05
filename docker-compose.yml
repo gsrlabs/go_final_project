@@ -1,8 +1,8 @@
 services:
   todo-scheduler:
-    build: .
-    # image: gsrlabs/todo-scheduler:latest
-    # container_name: todo-scheduler
+    # build: .
+    image: gsrlabs/todo-scheduler:latest
+    container_name: todo-scheduler
     ports:
       - "${TODO_PORT:-7540}:${TODO_PORT:-7540}"
     env_file:
@@ -17,12 +17,12 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    # networks:
-    #  - todo-net
+    networks:
+      - todo-net
 
-# networks:
-#  todo-net:
-#    driver: bridge
+networks:
+  todo-net:
+    driver: bridge
 
 
 
